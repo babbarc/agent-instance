@@ -1,0 +1,22 @@
+--- /opt/data/home/.hermes/patches/skill_utils.py.original	2026-06-21 10:10:39.586763628 +0100
++++ agent/skill_utils.py	2026-06-21 10:11:13.796514737 +0100
+@@ -680,11 +680,15 @@
+ 
+ 
+ def extract_skill_description(frontmatter: Dict[str, Any]) -> str:
+-    """Extract a truncated description from parsed frontmatter."""
+-    raw_desc = frontmatter.get("description", "")
+-    if not raw_desc:
++    """Extract a truncated description from parsed frontmatter.
++
++    Prefers the ``annotation`` field (LLM-optimised one-liner in the skills
++    index).  Falls back to ``description`` when no annotation is set.
++    """
++    raw = frontmatter.get("annotation") or frontmatter.get("description") or ""
++    if not raw:
+         return ""
+-    desc = str(raw_desc).strip().strip("'\"")
++    desc = str(raw).strip().strip("'\"")
+     if len(desc) > 60:
+         return desc[:57] + "..."
+     return desc

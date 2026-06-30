@@ -1,0 +1,12 @@
+--- tools/clarify_tool.py	2026-06-07 17:58:40.350840974 +0100
++++ tools/clarify_tool.py	2026-06-07 17:58:40.368671569 +0100
+@@ -99,8 +99,7 @@
+         "- You want to offer to update memory\n"
+         "- A decision has meaningful trade-offs the user should weigh in on\n\n"
+         "Do NOT use this tool for simple yes/no confirmation of dangerous "
+-        "commands (the terminal tool handles that). Prefer making a reasonable "
+-        "default choice yourself when the decision is low-stakes."
++        "commands (the terminal tool handles that)."
+     ),
+     "parameters": {
+         "type": "object",

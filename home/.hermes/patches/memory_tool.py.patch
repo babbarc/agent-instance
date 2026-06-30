@@ -1,0 +1,168 @@
+--- tools/memory_tool.py	2026-06-20 21:03:18.970304227 +0100
++++ tools/memory_tool.py	2026-06-20 21:06:36.191932928 +0100
+@@ -1,26 +1,19 @@
+ #!/usr/bin/env python3
+ """
+-Memory Tool Module - Persistent Curated Memory
++Memory Tool Module - Tier 1 Frozen Behavioral Guardrails
+ 
+-Provides bounded, file-backed memory that persists across sessions. Two stores:
+-  - MEMORY.md: agent's personal notes and observations (environment facts, project
+-    conventions, tool quirks, things learned)
+-  - USER.md: what the agent knows about the user (preferences, communication style,
+-    expectations, workflow habits)
+-
+-Both are injected into the system prompt as a frozen snapshot at session start.
+-Mid-session writes update files on disk immediately (durable) but do NOT change
+-the system prompt -- this preserves the prefix cache for the entire session.
+-The snapshot refreshes on the next session start.
+-
+-Entry delimiter: § (section sign). Entries can be multiline.
+-Character limits (not tokens) because char counts are model-independent.
+-
+-Design:
+-- Single `memory` tool with action parameter: add, replace, remove
+-- replace/remove use short unique substring matching (not full text or IDs)
+-- Behavioral guidance lives in the tool schema description
+-- Frozen snapshot pattern: system prompt is stable, tool responses show live state
++Manages Tier 1 memory — frozen behavioral guardrails auto-injected
++into the system prompt every turn. This is NOT general-purpose storage.
++
++Two stores:
++  - MEMORY.md: frozen behavioral guardrails that must fire every turn.
++    Only store behavioral re-anchor rules here (corrections, preferences,
++    operating principles). Injected every turn — keep it tight.
++  - USER.md: compact behavioral directives that do not change session to
++    session. Do not write to it unnecessarily.
++
++Storage routing for reference data: write_file to $HERMES_HOME/memory/
++tree (organized by domain: finance/, life/, reference/, etc.).
+ """
+ 
+ import json
+@@ -56,7 +49,7 @@
+     """Return the profile-scoped memories directory."""
+     return get_hermes_home() / "memories"
+ 
+-ENTRY_DELIMITER = "\n§\n"
++ENTRY_DELIMITER = "\n\u00a7\n"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -97,7 +90,7 @@
+             f"the patch tool, a shell append, a manual edit, or a "
+             f"concurrent session). A snapshot was saved to {bak_path}. "
+             f"Resolve the drift first — either rewrite the file as a clean "
+-            f"§-delimited list of entries, or move the extra content out — "
++            f"\u00a7-delimited list of entries, or move the extra content out — "
+             f"then retry. This guard exists to prevent silent data loss "
+             f"(issue #26045)."
+         ),
+@@ -617,9 +610,9 @@
+         if target == "user":
+             header = f"USER PROFILE (who the user is) [{pct}% — {current:,}/{limit:,} chars]"
+         else:
+-            header = f"MEMORY (your personal notes) [{pct}% — {current:,}/{limit:,} chars]"
++            header = f"MEMORY (behavioral guardrails) [{pct}% — {current:,}/{limit:,} chars]"
+ 
+-        separator = "═" * 46
++        separator = "\u2550" * 46
+         return f"{separator}\n{header}\n{separator}\n{content}"
+ 
+     @staticmethod
+@@ -639,8 +632,8 @@
+         if not raw.strip():
+             return []
+ 
+-        # Use ENTRY_DELIMITER for consistency with _write_file. Splitting by "§"
+-        # alone would incorrectly split entries that contain "§" in their content.
++        # Use ENTRY_DELIMITER for consistency with _write_file. Splitting by "\u00a7"
++        # alone would incorrectly split entries that contain "\u00a7" in their content.
+         entries = [e.strip() for e in raw.split(ENTRY_DELIMITER)]
+         return [e for e in entries if e]
+ 
+@@ -648,7 +641,7 @@
+         """Return a backup-path string if on-disk content shows external drift.
+ 
+         The memory file is supposed to be a list of small entries the tool
+-        wrote, joined by §. Detect drift via two signals:
++        wrote, joined by \u00a7. Detect drift via two signals:
+ 
+         1. Round-trip mismatch — re-parsing and re-serializing the file
+            doesn't produce identical bytes (rare; would catch oddly-encoded
+@@ -931,26 +924,37 @@
+ MEMORY_SCHEMA = {
+     "name": "memory",
+     "description": (
+-        "Save durable facts to persistent memory that survive across sessions. Memory is "
+-        "injected into every future turn, so keep entries compact and high-signal.\n\n"
+-        "HOW: make ALL your changes in ONE call via an 'operations' array (each item: "
+-        "{action, content?, old_text?}). The batch applies atomically and the char limit is "
+-        "checked only on the FINAL result — so a single call can remove/replace stale entries "
+-        "to free room AND add new ones, even when an add alone would overflow. The response "
+-        "reports current/limit chars and confirms completion; one batch call finishes the "
+-        "update, so don't repeat it. Use the bare action/content/old_text fields only for a "
+-        "single lone change.\n\n"
+-        "WHEN: save proactively when the user states a preference, correction, or personal "
+-        "detail, or you learn a stable fact about their environment, conventions, or workflow. "
+-        "Priority: user preferences & corrections > environment facts > procedures. The best "
+-        "memory stops the user repeating themselves.\n\n"
+-        "IF FULL: an add is rejected with the current entries shown. Reissue as ONE batch that "
+-        "removes or shortens enough stale entries and adds the new one together.\n\n"
+-        "TARGETS: 'user' = who the user is (name, role, preferences, style). 'memory' = your "
+-        "notes (environment, conventions, tool quirks, lessons).\n\n"
+-        "SKIP: trivial/obvious info, easily re-discovered facts, raw data dumps, task progress, "
+-        "completed-work logs, temporary TODO state (use session_search for those). Reusable "
+-        "procedures belong in a skill, not memory."
++        "Record rules that govern your ongoing behavior.\n\n"
++        "WHEN TO CALL:\n"
++        "- User states a preference or constraint\n"
++        "- User corrects your behavior\n"
++        "- You infer a persistent operating rule from context\n\n"
++        "DO NOT CALL for reference data (paths, contacts, IDs) "
++        "\u2192 use write_file to $HERMES_HOME/memory/.\n"
++        "DO NOT CALL for procedures \u2192 use skill_manage.\n\n"
++        "APPROVAL REQUIRED before calling: replace, remove.\n"
++        "Ask the user first. Do NOT invoke the tool until they confirm.\n\n"
++        "TARGETS:\n"
++        "  user   : identity and communication preferences\n"
++        "  memory : behavioral rules (tone, formatting, constraints)\n\n"
++        "ACTIONS and required fields:\n"
++        "  add     : content only\n"
++        "  replace : content + old_text (3-7 word phrase to locate)\n"
++        "  remove  : old_text only (3-7 word phrase to locate)\n\n"
++        "old_text: a short exact phrase (3-7 words) from the existing entry \u2014 "
++        "enough to locate it unambiguously. Do not paste the entire entry.\n\n"
++        "Both targets support single and batch operations. "
++        "Payload is EITHER single op (action/content/old_text) "
++        "OR batch (operations). Never both.\n\n"
++        "Single op (1 change):\n"
++        "  {\"target\": \"memory\", \"action\": \"add\", \"content\": \"Be concise\"}\n\n"
++        "Batch op (multiple changes, same target, atomic):\n"
++        "  on overflow: no changes apply. Reissue as one batch that "
++        "removes or shortens stale entries and adds the new content.\n"
++        "  {\"target\": \"memory\", \"operations\": [\n"
++        "    {\"action\": \"add\", \"content\": \"Be concise\"},\n"
++        "    {\"action\": \"remove\", \"old_text\": \"Always use emojis\"}\n"
++        "  ]}"
+     ),
+     "parameters": {
+         "type": "object",
+@@ -963,7 +967,7 @@
+             "target": {
+                 "type": "string",
+                 "enum": ["memory", "user"],
+-                "description": "Which memory store: 'memory' for personal notes, 'user' for user profile."
++                "description": "Which memory store: 'memory' for behavioral guardrails, 'user' for user profile."
+             },
+             "content": {
+                 "type": "string",
+@@ -1011,7 +1015,7 @@
+         operations=args.get("operations"),
+         store=kw.get("store")),
+     check_fn=check_memory_requirements,
+-    emoji="🧠",
++    emoji="\U0001f9e0",
+ )
+ 
+ 

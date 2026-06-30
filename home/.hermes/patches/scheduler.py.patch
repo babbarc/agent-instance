@@ -1,0 +1,33 @@
+--- cron/scheduler.py	2026-06-20 23:21:33.731655511 +0100
++++ cron/scheduler.py	2026-06-20 23:20:25.790994473 +0100
+@@ -2066,6 +2066,19 @@
+     Returns True if the job was processed (even if the job itself failed —
+     failure is recorded via ``mark_job_run``), False only if processing raised.
+     """
++    # Per-job profile context (ContextVar-only — thread-safe, no module-global).
++    _profile_token = None
++    _raw_profile = str(job.get("profile") or "").strip()
++    if _raw_profile:
++        try:
++            from hermes_cli.profiles import normalize_profile_name, resolve_profile_env
++            from hermes_constants import set_hermes_home_override
++            _canon = normalize_profile_name(_raw_profile)
++            _profile_home = Path(resolve_profile_env(_canon)).resolve()
++            _profile_token = set_hermes_home_override(_profile_home)
++            logger.info("Job '%s': using profile '%s' (%s)", job["id"], _canon, _profile_home)
++        except Exception as exc:
++            logger.warning("Job '%s': configured profile %r invalid (%s) — falling back to default", job["id"], _raw_profile, exc)
+     try:
+         success, output, final_response, error = run_job(job)
+ 
+@@ -2107,6 +2120,10 @@
+         logger.error("Error processing job %s: %s", job['id'], e)
+         mark_job_run(job["id"], False, str(e))
+         return False
++    finally:
++        if _profile_token is not None:
++            from hermes_constants import reset_hermes_home_override
++            reset_hermes_home_override(_profile_token)
+ 
+ 
+ def _notify_provider_jobs_changed() -> None:

@@ -1,0 +1,207 @@
+--- agent/prompt_builder.py	2026-06-20 19:48:09.000000000 +0100
++++ agent/prompt_builder.py	2026-06-27 12:36:39.250793544 +0100
+@@ -142,26 +142,21 @@
+ )
+ 
+ MEMORY_GUIDANCE = (
+-    "You have persistent memory across sessions. Save durable facts using the memory "
+-    "tool: user preferences, environment details, tool quirks, and stable conventions. "
+-    "Memory is injected into every turn, so keep it compact and focused on facts that "
+-    "will still matter later.\n"
+-    "Prioritize what reduces future user steering — the most valuable memory is one "
+-    "that prevents the user from having to correct or remind you again. "
+-    "User preferences and recurring corrections matter more than procedural task details.\n"
+-    "Do NOT save task progress, session outcomes, completed-work logs, or temporary TODO "
+-    "state to memory; use session_search to recall those from past transcripts. "
+-    "Specifically: do not record PR numbers, issue numbers, commit SHAs, 'fixed bug X', "
+-    "'submitted PR Y', 'Phase N done', file counts, or any artifact that will be stale "
+-    "in 7 days. If a fact will be stale in a week, it does not belong in memory. "
+-    "If you've discovered a new way to do something, solved a problem that could be "
+-    "necessary later, save it as a skill with the skill tool.\n"
+-    "Write memories as declarative facts, not instructions to yourself. "
+-    "'User prefers concise responses' ✓ — 'Always respond concisely' ✗. "
+-    "'Project uses pytest with xdist' ✓ — 'Run tests with pytest -n 4' ✗. "
+-    "Imperative phrasing gets re-read as a directive in later sessions and can "
+-    "cause repeated work or override the user's current request. Procedures and "
+-    "workflows belong in skills, not memory."
++    "MEMORY.md (via the memory tool) is for behavioral re-anchor only. "
++    "Save the 2-3 behavioral rules that must fire every turn here \u2014 "
++    "corrections, preferences, lessons about how to operate.\n"
++    "Durable facts (policy numbers, paths, contacts, conventions, "
++    "environment details, personal info) go to the $HERMES_HOME/memory/ "
++    "tree via write_file \u2014 organized by domain (finance/, life/, "
++    "reference/, etc.). Each fact gets its own .md file.\n"
++    "Skills are for procedures only. Never embed instance data or "
++    "personal facts into a skill.\n"
++    "If it doesn't need attention every turn, it doesn't belong in "
++    "MEMORY.md. If it's reference data, use $HERMES_HOME/memory/. "
++    "If it's procedural, skill_manage.\n"
++    "Memory tool `replace` and `remove` actions require asking the user first. "
++    "Only `add` may be called freely.\n"
++    "Use session_search for past conversation context."
+ )
+ 
+ SESSION_SEARCH_GUIDANCE = (
+@@ -171,12 +166,26 @@
+ )
+ 
+ SKILLS_GUIDANCE = (
+-    "After completing a complex task (5+ tool calls), fixing a tricky error, "
+-    "or discovering a non-trivial workflow, save the approach as a "
+-    "skill with skill_manage so you can reuse it next time.\n"
+-    "When using a skill and finding it outdated, incomplete, or wrong, "
+-    "patch it immediately with skill_manage(action='patch') — don't wait to be asked. "
+-    "Skills that aren't maintained become liabilities."
++    "Before creating a skill, check: is this a repeatable procedure "
++    "someone would load to execute? If the work is a one-time change "
++    "that's already committed, the code IS the deliverable — no skill "
++    "needed. Skills preserve procedures, not postmortems. Only save "
++    "when you'd genuinely reload and follow the steps again.\n"
++    "Name skills as verb+noun — e.g. 'book-restaurant', not "
++    "'restaurant-booking'.\n"
++    "ARCHITECTURAL RULE: SKILL.md body is for numbered procedures and decision "
++    "rules only. Pitfalls, warnings, troubleshooting, and edge cases MUST go in "
++    "references/<topic>.md — never inline in SKILL.md. To add a pitfall, write it "
++    "to references/<topic>.md and link from SKILL.md with a one-line pointer.\n"
++    "Distill aggressively — one line per pitfall in the reference file. "
++    "Skip pitfalls that wouldn\'t block a future run.\n"
++    "Skills should be clean and straightforward, not diagnostic archives.\n"
++    "When using a skill with genuinely broken steps (wrong commands, stale paths, "
++    "incorrect flags), patch it with skill_manage(action='patch'). "
++    "Don\'t pad it with edge cases that wouldn\'t block a future run. "
++    "Skills that aren\'t maintained become liabilities.\n"
++    "Pinned skills are protected from deletion only — edits and patches "
++    "still work as normal."
+ )
+ 
+ KANBAN_GUIDANCE = (
+@@ -255,54 +264,26 @@
+     "cross-agent handoffs that outlive one API loop."
+ )
+ 
+-TOOL_USE_ENFORCEMENT_GUIDANCE = (
+-    "# Tool-use enforcement\n"
+-    "You MUST use your tools to take action — do not describe what you would do "
+-    "or plan to do without actually doing it. When you say you will perform an "
+-    "action (e.g. 'I will run the tests', 'Let me check the file', 'I will create "
+-    "the project'), you MUST immediately make the corresponding tool call in the same "
+-    "response. Never end your turn with a promise of future action — execute it now.\n"
+-    "Keep working until the task is actually complete. Do not stop with a summary of "
+-    "what you plan to do next time. If you have tools available that can accomplish "
+-    "the task, use them instead of telling the user what you would do.\n"
+-    "Every response should either (a) contain tool calls that make progress, or "
+-    "(b) deliver a final result to the user. Responses that only describe intentions "
+-    "without acting are not acceptable."
+-)
+-
+-# Model name substrings that trigger tool-use enforcement guidance.
+-# Add new patterns here when a model family needs explicit steering.
+-TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
+-
+-# Universal "finish the job" guidance — applied to ALL models, not gated
+-# by model family.  Addresses two cross-model failure modes:
+-#   1. Stopping after a stub: writing a tiny file or running one command
+-#      and then ending the turn with a description of the plan instead
+-#      of the finished artifact.  (Observed on Opus during a real
+-#      Sarasota real-estate build task: 3 API calls, 85-byte file,
+-#      one terminal command, finish_reason=stop.)
+-#   2. Fabricating output when a real path is blocked.  When `pip` or a
+-#      tool fails, some models will synthesize plausible-looking results
+-#      (fake addresses, fake JSON, fake numbers) instead of reporting
+-#      the blocker.  (Observed on DeepSeek v4-flash on the same task:
+-#      pushed through PEP-668 wall, then returned fabricated listings.)
+-#
+-# Short on purpose.  This block is shipped to every user, every session,
+-# in the cached system prompt — token cost is paid once at install and
+-# then amortised across all sessions via prefix caching.  Keep it tight.
+-TASK_COMPLETION_GUIDANCE = (
+-    "# Finishing the job\n"
+-    "When the user asks you to build, run, or verify something, the deliverable is "
+-    "a working artifact backed by real tool output — not a description of one. "
+-    "Do not stop after writing a stub, a plan, or a single command. Keep working "
+-    "until you have actually exercised the code or produced the requested result, "
+-    "then report what real execution returned.\n"
+-    "If a tool, install, or network call fails and blocks the real path, say so "
+-    "directly and try an alternative (different package manager, different "
+-    "approach, ask the user). NEVER substitute plausible-looking fabricated "
+-    "output (made-up data, invented file contents, synthesised API responses) "
+-    "for results you couldn't actually produce. Reporting a blocker honestly "
+-    "is always better than inventing a result."
++WORKFLOW_GUIDANCE = (
++    "## Workflow\n"
++    "You are always in one of 3 states. You can re-enter CLARIFY any time.\n"
++    "\n"
++    "CLARIFY \u2014 Requirements are ambiguous. Ask precise questions until certain. "
++    "Do not guess intent. Do not act.\n"
++    "EXECUTE \u2014 Requirements are clear. Execute exactly what was asked. "
++    "No investigation, no proposal, no extra steps. "
++    "State-modifying actions: if explicit in instruction, proceed. "
++    "If not addressed, confirm once before acting.\n"
++    "BLOCKED \u2014 Tool/network call failed. Report the exact error. "
++    "Ask for direction. No fabrications.\n"
++    "\n"
++    "Rules:\n"
++    "- Clear instruction \u2192 execute directly. No investigation. No proposal.\n"
++    "- Ambiguous instruction \u2192 clarify. Do not guess intent.\n"
++    "- Never add scope you weren't asked for.\n"
++    "- Never act without being asked.\n"
++    "- When blocked, report the exact failure. Stop. Never substitute fabricated output.\n"
++    "- Never end a turn empty: deliver a result, report a blocker, or ask a clarifying question."
+ )
+ 
+ # Universal parallel-tool-call guidance — applied to ALL models.
+@@ -379,15 +360,18 @@
+     "says about their personal setup.\n"
+     "</mandatory_tool_use>\n"
+     "\n"
+-    "<act_dont_ask>\n"
+-    "When a question has an obvious default interpretation, act on it immediately "
+-    "instead of asking for clarification. Examples:\n"
+-    "- 'Is port 443 open?' → check THIS machine (don't ask 'open where?')\n"
+-    "- 'What OS am I running?' → check the live system (don't use user profile)\n"
+-    "- 'What time is it?' → run `date` (don't guess)\n"
+-    "Only ask for clarification when the ambiguity genuinely changes what tool "
+-    "you would call.\n"
+-    "</act_dont_ask>\n"
++    "<resolve_ambiguity>\n"
++    "Two types of ambiguity:\n"
++    "\n"
++    "If the user's INSTRUCTION is unclear \u2014 ask. Do not guess intent. (See CLARIFY phase.)\n"
++    "\n"
++    "If the EXECUTION CONTEXT is unclear (\"which machine?\", \"which port?\") \u2014\n"
++    "default to the live system. Examples:\n"
++    "- 'Is port 443 open?' \u2192 check THIS machine (don't ask 'open where?')\n"
++    "- 'What OS am I running?' \u2192 check the live system (don't use user profile)\n"
++    "- 'What time is it?' \u2192 run `date` (don't guess)\n"
++    "</resolve_ambiguity>\n"
++    "\n"
+     "\n"
+     "<prerequisite_checks>\n"
+     "- Before taking an action, check whether prerequisite discovery, lookup, or "
+@@ -415,7 +399,7 @@
+ )
+ 
+ # Gemini/Gemma-specific operational guidance, adapted from OpenCode's gemini.txt.
+-# Injected alongside TOOL_USE_ENFORCEMENT_GUIDANCE when the model is Gemini or Gemma.
++# Injected alongside WORKFLOW_GUIDANCE when the model is Gemini or Gemma.
+ GOOGLE_MODEL_OPERATIONAL_GUIDANCE = (
+     "# Google model operational directives\n"
+     "Follow these operational rules strictly:\n"
+@@ -1487,10 +1471,13 @@
+             "skills, voice, gateway, plugins, or any feature — load the `hermes-agent` skill "
+             "first. It has the actual commands (e.g. `hermes config set …`, `hermes tools`, "
+             "`hermes setup`) so you don't have to guess or invent workarounds.\n"
+-            "If a skill has issues, fix it with skill_manage(action='patch').\n"
+-            "After difficult/iterative tasks, offer to save as a skill. "
+-            "If a skill you loaded was missing steps, had wrong commands, or needed "
+-            "pitfalls you discovered, update it before finishing.\n"
++            "If a skill has issues, check whether it\'s an installed skill at /opt/hermes/skills/ \u2014 report it, don\'t patch. User-created skills at /opt/data/skills/ \u2014 fix with skill_manage(action=\'patch\').\n"
++            "After difficult/iterative tasks, run the skill gate first: if the procedure is repeatable and non-obvious, offer to save it as a skill. "
++            "If a user-created skill you loaded was missing steps or had wrong commands \u2014 "
++            "patch the steps in SKILL.md. If it needed new pitfalls \u2014 write them to "
++            "references/<topic>.md, never inline in SKILL.md body. "
++            "Only capture pitfalls that would block a future run. "
++            "For installed skills, report the issue \u2014 don\'t patch.\n"
+             "\n"
+             "<available_skills>\n"
+             + "\n".join(index_lines) + "\n"
