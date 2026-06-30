@@ -126,4 +126,3 @@ browser_cdp(method="Page.navigate", params={"url": "https://example.com/account"
 - **Context isolation** — `browser_navigate` resets cookies. Use `Page.navigate` with saved target_id.
 - **Chrome 148+** blocks remote debugging on default data dir. Use non-default path.
 - **Never put secrets in tool params** — leaks to permanent record. Pipe via `pass-to` (see credential-pre-flight).
-<!-- SYNC_TEST_REMOVE_ME -->
