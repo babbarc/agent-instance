@@ -32,7 +32,11 @@ See `references/pitfalls.md` for the most common patch-state misreading.
 
 1. **Copy** — `cp /opt/hermes/<path>/<file>.py /opt/data/work_patch.py` (not `/tmp/` — the `patch` tool's write guard blocks `offset/limit`-read files there).
 
-2. **Patch** — `patch(path='/opt/data/work_patch.py', old_string='...', new_string='...')`. Never Python string manipulation, heredocs, or raw strings — `\\b` (0x5C 0x62) corrupts via any other method.
+2. **Patch** — Two approaches depending on content:
+   - **Simple text replacements** (add/remove plain sentences, change flag names, insert new methods): use `patch(path='/opt/data/work_patch.py', old_string='...', new_string='...')`.
+   - **Backslash-rich replacements** (raw strings with `\\b`, `\\s`, `\\uXXXX`, `\\UXXXXXXXX`, or regex patterns with unicode escapes): use `terminal` with a Python heredoc instead — the `patch` tool's string escaping doubles backslashes. Write the edit script via `write_file`, then execute with `python3 /path/to/edit_script.py`. After editing, diff against .original to produce the `.patch` file.
+   
+   Never Python string manipulation, heredocs, or raw strings directly in `terminal`'s inline code — `\\\\b` (0x5C 0x62) corrupts via any method. Use `write_file` to save the script, then run it.
 
 3. **Verify syntax** — `python3 -c "c=open('/opt/data/work_patch.py','rb').read(); assert b'\x08' not in c"` then `python3 -c "import ast; ast.parse(open('/opt/data/work_patch.py').read())"`.
 
@@ -95,11 +99,12 @@ When upgrading Hermes, existing patches may fail against new upstream code. Vali
 5. **Regenerate a failed patch:**
    1. Copy upstream file to working copy.
    2. Read the old patch to understand the *intent* of each hunk (not the exact text).
-   3. For passing hunks — apply them directly with `patch -p0` (accept partial failure).
-   4. For the failed hunk — apply the change manually using find-and-replace.
-   5. Verify syntax: `python3 -c "import ast; ast.parse(open('/tmp/work.py').read())"`.
-   6. Diff against the upstream file, fix header paths, save.
-6. **.original lifecycle:** The init script recaptures `.original` from the new installed version on boot. Old `.patch` files (made against old `.original`) will NOT apply to the new `.original`. The new `.patch` must be made against the new upstream code.
+   3. Check whether upstream refactoring moved the logic to a different function or file. If so, adapt the insertion point — apply the change where the logic now lives, not where it used to.
+   4. For passing hunks — apply them directly with `patch -p0` (accept partial failure).
+   5. For the failed hunk — apply the change manually using find-and-replace via Python heredoc (for backslash-rich content) or the `patch` tool (for plain text).
+   6. Verify syntax: `python3 -c "import ast; ast.parse(open('/tmp/work.py').read())"`.
+   7. Diff against the upstream file, fix header paths, save.
+6. **.original lifecycle:** The init script recaptures `.original` from the new installed version on boot. **However, the init script only captures `.original` if the file doesn't already exist.** Stale root-owned `.original` files from the previous version must be removed (`sudo rm ~/.hermes/patches/*.original`) before restarting, or the script will keep the old originals and the new patches (made against v18 upstream) will fail to apply.
 7. **Semantic check:** After all patches regenerate cleanly, assess whether the upstream change made any patch obsolete or if new capabilities need acknowledging.
 
 ---
@@ -130,6 +135,7 @@ All live at `~/.hermes/patches/<file>.py.patch`:
 - `tools/clarify_tool.py`
 - `tools/memory_tool.py`
 - `tools/skill_manager_tool.py`
+- `cron/scheduler.py`
 
 ---
 
@@ -160,6 +166,7 @@ See `references/<topic>.md` for:
 | `init-script-mechanics.md` | Bind mount details for the s6 overlay |
 | `patch-review-checklist.md` | Full post-apply checklist |
 | `pitfalls.md` | Common patch-state misreading, bad assumptions about patched files |
+| `patch-tool-backslash-escaping.md` | When the `patch` tool doubles backslashes in raw Python strings |
 
 **Script:**
 - `scripts/validate-patch.py` — validate unified-diff hunk headers match body counts
