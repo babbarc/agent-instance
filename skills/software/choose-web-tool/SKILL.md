@@ -55,3 +55,4 @@ Don't retry same tool >2-3 times — escalate instead.
 
 - `references/cdp-injection-pattern.md` — CDP password injection
 - `references/site-patterns/` — site-specific accumulated knowledge
+ 
