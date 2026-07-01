@@ -1,6 +1,6 @@
---- cron/scheduler.py	2026-06-20 23:21:33.731655511 +0100
-+++ cron/scheduler.py	2026-06-20 23:20:25.790994473 +0100
-@@ -2066,6 +2066,19 @@
+--- cron/scheduler.py	2026-07-01 21:52:50.193068531 +0100
++++ cron/scheduler.py	2026-07-01 22:07:42.775976933 +0100
+@@ -3097,6 +3097,19 @@
      Returns True if the job was processed (even if the job itself failed —
      failure is recorded via ``mark_job_run``), False only if processing raised.
      """
@@ -18,9 +18,9 @@
 +        except Exception as exc:
 +            logger.warning("Job '%s': configured profile %r invalid (%s) — falling back to default", job["id"], _raw_profile, exc)
      try:
-         success, output, final_response, error = run_job(job)
- 
-@@ -2107,6 +2120,10 @@
+         # Pre-run dispatch claim (issue #38758): atomically commit a finite
+         # one-shot's dispatch BEFORE its side effect runs, so a tick that dies
+@@ -3158,6 +3171,10 @@
          logger.error("Error processing job %s: %s", job['id'], e)
          mark_job_run(job["id"], False, str(e))
          return False

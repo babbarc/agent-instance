@@ -1,13 +1,6 @@
---- tools/skill_manager_tool.py	2026-06-07 14:52:20.477618608 +0100
-+++ tools/skill_manager_tool.py	2026-06-07 10:35:21.708826101 +0100
-@@ -902,32 +902,14 @@
-     "description": (
-         "Manage skills (create, update, delete). Skills are your procedural "
-         "memory — reusable approaches for recurring task types. "
--        f"New skills go to {display_hermes_home()}/skills/; existing skills can be modified wherever they live.\n\n"
-+        f"New skills go to {display_hermes_home()}/skills/; existing skills "
-+        "can be modified wherever they live.\n\n"
-         "Actions: create (full SKILL.md + optional category), "
+--- tools/skill_manager_tool.py	2026-07-01 21:52:49.987057478 +0100
++++ tools/skill_manager_tool.py	2026-07-01 22:02:34.709180875 +0100
+@@ -1415,27 +1415,9 @@
          "patch (old_string/new_string — preferred for fixes), "
          "edit (full SKILL.md rewrite — major overhauls only), "
          "delete, write_file, remove_file.\n\n"
@@ -34,6 +27,7 @@
 -        "pitfalls come up; pin only guards against irrecoverable loss."
 +        "On delete, set absorbed_into=<umbrella> for consolidation, "
 +        "absorbed_into=\"\" for pruning. See parameter description for details."
++
      ),
      "parameters": {
          "type": "object",

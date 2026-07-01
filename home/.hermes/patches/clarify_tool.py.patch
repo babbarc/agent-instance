@@ -1,7 +1,7 @@
---- tools/clarify_tool.py	2026-06-07 17:58:40.350840974 +0100
-+++ tools/clarify_tool.py	2026-06-07 17:58:40.368671569 +0100
-@@ -99,8 +99,7 @@
-         "- You want to offer to update memory\n"
+--- tools/clarify_tool.py	2026-07-01 21:52:49.611129798 +0100
++++ tools/clarify_tool.py	2026-07-01 21:59:47.742327208 +0100
+@@ -143,8 +143,7 @@
+         "- You want to offer to save a skill or update memory\n"
          "- A decision has meaningful trade-offs the user should weigh in on\n\n"
          "Do NOT use this tool for simple yes/no confirmation of dangerous "
 -        "commands (the terminal tool handles that). Prefer making a reasonable "

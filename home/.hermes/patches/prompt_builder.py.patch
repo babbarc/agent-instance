@@ -1,6 +1,6 @@
---- agent/prompt_builder.py	2026-06-20 19:48:09.000000000 +0100
-+++ agent/prompt_builder.py	2026-06-27 12:36:39.250793544 +0100
-@@ -142,26 +142,21 @@
+--- agent/prompt_builder.py	2026-07-01 21:52:48.834078056 +0100
++++ agent/prompt_builder.py	2026-07-01 22:15:35.769996145 +0100
+@@ -145,26 +145,21 @@
  )
  
  MEMORY_GUIDANCE = (
@@ -42,7 +42,7 @@
  )
  
  SESSION_SEARCH_GUIDANCE = (
-@@ -171,12 +166,26 @@
+@@ -174,12 +169,26 @@
  )
  
  SKILLS_GUIDANCE = (
@@ -75,7 +75,7 @@
  )
  
  KANBAN_GUIDANCE = (
-@@ -255,54 +264,26 @@
+@@ -278,54 +287,26 @@
      "cross-agent handoffs that outlive one API loop."
  )
  
@@ -150,7 +150,7 @@
  )
  
  # Universal parallel-tool-call guidance — applied to ALL models.
-@@ -379,15 +360,18 @@
+@@ -402,15 +383,17 @@
      "says about their personal setup.\n"
      "</mandatory_tool_use>\n"
      "\n"
@@ -174,11 +174,10 @@
 +    "- 'What OS am I running?' \u2192 check the live system (don't use user profile)\n"
 +    "- 'What time is it?' \u2192 run `date` (don't guess)\n"
 +    "</resolve_ambiguity>\n"
-+    "\n"
      "\n"
      "<prerequisite_checks>\n"
      "- Before taking an action, check whether prerequisite discovery, lookup, or "
-@@ -415,7 +399,7 @@
+@@ -438,7 +421,7 @@
  )
  
  # Gemini/Gemma-specific operational guidance, adapted from OpenCode's gemini.txt.
@@ -187,7 +186,7 @@
  GOOGLE_MODEL_OPERATIONAL_GUIDANCE = (
      "# Google model operational directives\n"
      "Follow these operational rules strictly:\n"
-@@ -1487,10 +1471,13 @@
+@@ -1660,10 +1643,13 @@
              "skills, voice, gateway, plugins, or any feature — load the `hermes-agent` skill "
              "first. It has the actual commands (e.g. `hermes config set …`, `hermes tools`, "
              "`hermes setup`) so you don't have to guess or invent workarounds.\n"

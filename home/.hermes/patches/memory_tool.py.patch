@@ -1,5 +1,5 @@
---- tools/memory_tool.py	2026-06-20 21:03:18.970304227 +0100
-+++ tools/memory_tool.py	2026-06-20 21:06:36.191932928 +0100
+--- tools/memory_tool.py	2026-07-01 21:52:49.795515970 +0100
++++ tools/memory_tool.py	2026-07-01 22:13:35.846442025 +0100
 @@ -1,26 +1,19 @@
  #!/usr/bin/env python3
  """
@@ -58,7 +58,7 @@
              f"then retry. This guard exists to prevent silent data loss "
              f"(issue #26045)."
          ),
-@@ -617,9 +610,9 @@
+@@ -674,9 +667,9 @@
          if target == "user":
              header = f"USER PROFILE (who the user is) [{pct}% — {current:,}/{limit:,} chars]"
          else:
@@ -70,7 +70,7 @@
          return f"{separator}\n{header}\n{separator}\n{content}"
  
      @staticmethod
-@@ -639,8 +632,8 @@
+@@ -696,8 +689,8 @@
          if not raw.strip():
              return []
  
@@ -81,7 +81,7 @@
          entries = [e.strip() for e in raw.split(ENTRY_DELIMITER)]
          return [e for e in entries if e]
  
-@@ -648,7 +641,7 @@
+@@ -705,7 +698,7 @@
          """Return a backup-path string if on-disk content shows external drift.
  
          The memory file is supposed to be a list of small entries the tool
@@ -90,7 +90,7 @@
  
          1. Round-trip mismatch — re-parsing and re-serializing the file
             doesn't produce identical bytes (rare; would catch oddly-encoded
-@@ -931,26 +924,37 @@
+@@ -1058,28 +1051,39 @@
  MEMORY_SCHEMA = {
      "name": "memory",
      "description": (
@@ -146,9 +146,12 @@
 +        "    {\"action\": \"remove\", \"old_text\": \"Always use emojis\"}\n"
 +        "  ]}"
      ),
-     "parameters": {
+-    "parameters": {
++"parameters": {
          "type": "object",
-@@ -963,7 +967,7 @@
+         "properties": {
+             "action": {
+@@ -1090,7 +1094,7 @@
              "target": {
                  "type": "string",
                  "enum": ["memory", "user"],
@@ -157,7 +160,7 @@
              },
              "content": {
                  "type": "string",
-@@ -1011,7 +1015,7 @@
+@@ -1138,7 +1142,7 @@
          operations=args.get("operations"),
          store=kw.get("store")),
      check_fn=check_memory_requirements,

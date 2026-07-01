@@ -1,5 +1,5 @@
---- /opt/data/home/.hermes/patches/system_prompt.py.original	2026-06-20 21:56:56.202260209 +0100
-+++ agent/system_prompt.py	2026-06-20 22:04:30.844404094 +0100
+--- agent/system_prompt.py	2026-07-01 21:52:49.211369057 +0100
++++ agent/system_prompt.py	2026-07-01 22:14:29.276088533 +0100
 @@ -38,9 +38,7 @@
      SESSION_SEARCH_GUIDANCE,
      SKILLS_GUIDANCE,
@@ -27,7 +27,7 @@
  
      # Universal parallel-tool-call guidance.  Tells the model to batch
      # independent tool calls into one assistant turn rather than emitting one
-@@ -219,41 +211,21 @@
+@@ -221,41 +213,21 @@
      nous_subscription_prompt = _r.build_nous_subscription_prompt(agent.valid_tool_names)
      if nous_subscription_prompt:
          stable_parts.append(nous_subscription_prompt)

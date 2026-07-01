@@ -1,6 +1,6 @@
---- /opt/data/home/.hermes/patches/skill_utils.py.original	2026-06-21 10:10:39.586763628 +0100
-+++ agent/skill_utils.py	2026-06-21 10:11:13.796514737 +0100
-@@ -680,11 +680,15 @@
+--- agent/skill_utils.py	2026-07-01 21:52:49.024522871 +0100
++++ agent/skill_utils.py	2026-07-01 22:03:04.255447392 +0100
+@@ -708,11 +708,15 @@
  
  
  def extract_skill_description(frontmatter: Dict[str, Any]) -> str:
