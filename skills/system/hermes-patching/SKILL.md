@@ -173,32 +173,6 @@ All live at `~/.hermes/patches/<file>.py.patch`:
 
 ## Remove a Patch
 
-Remove a patch file to stop it applying on future boots. Two strategies depending on whether the installed file is user-writable or root-owned (container):
-
-### Decision: Which strategy?
-
-1. **Check file ownership** — `ls -la /opt/hermes/<path>/<file>.py`
-2. **If user-writable** (hermes user) → **Strategy A** (revert live file immediately)
-3. **If root-owned** (`root root`) → **Strategy B** (remove from mechanism only; takes effect on next restart)
-4. **Verify init script** — Read `/etc/cont-init.d/99-hermes-patches` and confirm the patch filename is handled by the `[ -f "$patch_file" ] || continue` guard. If a filename is hardcoded in the `for f in ...` loop AND the file-existence guard is absent, the init script would error on next boot — remove the filename from the loop.
-
-#### Strategy A — Restore live file (user-writable)
-
-```bash
-cp ~/.hermes/patches/<file>.py.original /opt/hermes/<path>/<file>.py
-python3 -c "import ast; ast.parse(open('/opt/hermes/<path>/<file>.py').read())"
-```
-
-#### Strategy B — Remove patch file (root-owned, container)
-
-```bash
-rm ~/.hermes/patches/<file>.py.patch
-```
-
-The init script skips missing `.patch` files. On next container restart, the clean upstream file from the image stays untouched. A stale `.original` backup is harmless — the init script only consults it for manual diff reference, never for the apply pass.
-
-## Remove a Patch
-
 Remove a patch file to stop it applying on future boots. Two strategies depending on file ownership (root-owned in container, user-writable on host).
 
 ### Decision: which strategy?

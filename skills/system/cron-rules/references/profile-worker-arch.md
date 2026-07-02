@@ -137,6 +137,23 @@ TELEGRAM_HOME_CHANNEL=<chat_id>
 
 No `enabled: true` in config.yaml, no `allowed_users`, no webhook config, no polling setup. The adapter starts (triggered by the auto-created platform config), hits the lock, fails, and the delivery code falls through to standalone sends.
 
+### Suppressing the Adapter Retry Loop (Plugin Disable)
+
+The Telegram adapter fails `connect()` with `retryable=True`, so the gateway retries periodically. The retry is harmless (just log noise in `gateway.log`) but can be suppressed by disabling the Telegram **plugin** in the worker profile's config:
+
+```yaml
+# /opt/data/profiles/<worker>/config.yaml
+plugins:
+  disabled:
+    - telegram
+```
+
+This prevents the Telegram plugin from registering in the plugin registry (`plugins/platforms/telegram/adapter.py:8305:register()`). When the gateway iterates platforms during startup, `_create_adapter()` checks the registry → finds no Telegram entry → returns `None` → gateway logs `"No adapter available for telegram"` once and continues. No retry loop.
+
+**Why this doesn't break delivery**: The standalone `_send_to_platform()` path in `tools/send_message_tool.py:723` imports the Telegram adapter directly at module level (line 745: `from plugins.platforms.telegram.adapter import TelegramAdapter`), not through the plugin registry. It needs only the token string from the in-memory `pconfig` object — the plugin registry is irrelevant to the delivery code path.
+
+The device `hermes_cli.config.load_config()` is per-profile, so disabling the plugin in one profile's config.yaml does NOT affect other profiles' gateways. The default profile's Telegram adapter continues to connect and poll normally.
+
 ### Separate Bot Token (Alternative)
 
 If you want the worker-profile gateway to have its own full Telegram adapter (e.g., for separate inbound handling), use a different bot token. Different token → different lock scope → no conflict. The worker-profile gateway polls independently with its own bot, and deliveries arrive from a different bot name.

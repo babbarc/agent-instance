@@ -78,6 +78,7 @@ Before modifying any cron job, load `system-architect` for structural governance
 
 Key rules:
 - NEVER edit cron/jobs.json or config.yaml directly — use `cronjob` tool or `hermes config set`
+- `hermes config set` cannot create YAML list values — see `system-architect/references/hermes-config-cli-limitations.md` for the fallback if the CLI can't express the needed config shape
 - Scope updates to ONLY the fields that need to change
 - Verify the job_id matches the intended cron before calling update
 - Update the snapshot file immediately after every prompt change
