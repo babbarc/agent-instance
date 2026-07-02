@@ -109,6 +109,30 @@ When upgrading Hermes, existing patches may fail against new upstream code. Vali
 
 ---
 
+## Post-Update Verification
+
+When the user reports that Hermes was updated ("you have been updated") and asks you to verify patches survived:
+
+1. **Load this skill** — `skill_view(name='hermes-patching')` before any patch investigation.
+
+2. **Check status.json** — `cat ~/.hermes/patches/status.json`. Every tracked file should report `"ok"`.
+
+3. **Verify each patch landed in current sources** — for each entry in Files Tracked:
+   - Extract one unique added line from the patch: `grep '^+' ~/.hermes/patches/<file>.py.patch | grep -v '^+++' | sed 's/^+//' | grep -v '^[[:space:]]*$' | head -1`
+   - Search for that line in the current source file (under `$INSTALL_DIR/<path>/<file>.py`).
+   - Report APPLIED or MISSING per file.
+
+4. **Check patch headers match current file tree** — `head -3 ~/.hermes/patches/<file>.py.patch`. The `---` path must match where the file lives now. Files may have moved between directories (e.g. `agent/` → `tools/`) in the update.
+
+5. **Check init script paths** — read `/etc/cont-init.d/99-hermes-patches` and confirm:
+   - Every `cp` source path points to a file that exists at `$INSTALL_DIR`.
+   - Every file in the `for f in` loop has a `.patch` file in `$PATCHES_DIR`.
+   - If files migrated, both `cp` lines and patch headers reflect the new locations.
+
+6. **Report results** — table with columns: file | status (APPLIED/MISSING) | notes. Flag any location changes.
+
+---
+
 ## Post-Apply Audit: Patch Quality & Contradiction Review
 
 After creating, updating, or upgrading patches — or when auditing an existing set:
@@ -135,7 +159,6 @@ All live at `~/.hermes/patches/<file>.py.patch`:
 - `tools/clarify_tool.py`
 - `tools/memory_tool.py`
 - `tools/skill_manager_tool.py`
-- `cron/scheduler.py`
 
 ---
 
@@ -148,9 +171,74 @@ All live at `~/.hermes/patches/<file>.py.patch`:
 
 ---
 
-## Revert
+## Remove a Patch
 
-`cp ~/.hermes/patches/<file>.py.original /opt/hermes/<path>/<file>.py`
+Remove a patch file to stop it applying on future boots. Two strategies depending on whether the installed file is user-writable or root-owned (container):
+
+### Decision: Which strategy?
+
+1. **Check file ownership** — `ls -la /opt/hermes/<path>/<file>.py`
+2. **If user-writable** (hermes user) → **Strategy A** (revert live file immediately)
+3. **If root-owned** (`root root`) → **Strategy B** (remove from mechanism only; takes effect on next restart)
+4. **Verify init script** — Read `/etc/cont-init.d/99-hermes-patches` and confirm the patch filename is handled by the `[ -f "$patch_file" ] || continue` guard. If a filename is hardcoded in the `for f in ...` loop AND the file-existence guard is absent, the init script would error on next boot — remove the filename from the loop.
+
+#### Strategy A — Restore live file (user-writable)
+
+```bash
+cp ~/.hermes/patches/<file>.py.original /opt/hermes/<path>/<file>.py
+python3 -c "import ast; ast.parse(open('/opt/hermes/<path>/<file>.py').read())"
+```
+
+#### Strategy B — Remove patch file (root-owned, container)
+
+```bash
+rm ~/.hermes/patches/<file>.py.patch
+```
+
+The init script skips missing `.patch` files. On next container restart, the clean upstream file from the image stays untouched. A stale `.original` backup is harmless — the init script only consults it for manual diff reference, never for the apply pass.
+
+## Remove a Patch
+
+Remove a patch file to stop it applying on future boots. Two strategies depending on file ownership (root-owned in container, user-writable on host).
+
+### Decision: which strategy?
+
+1. **Check file ownership** — `ls -la /opt/hermes/<path>/<file>.py`
+2. **If the installed file is user-writable** (hermes user) → Strategy A (revert live file immediately)
+3. **If the installed file is root-owned** (`root root`) → Strategy B (remove patch only; clean upstream restored on next container restart)
+4. **Either way, update the init script** — go to Step 3 after removal.
+
+### Strategy A — Restore live file (user-writable host)
+
+```bash
+cp ~/.hermes/patches/<file>.py.original /opt/hermes/<path>/<file>.py
+python3 -c "import ast; ast.parse(open('/opt/hermes/<path>/<file>.py').read())"
+```
+
+### Strategy B — Remove patch file only (root-owned container)
+
+```bash
+rm ~/.hermes/patches/<file>.py.patch
+```
+
+The init script reads `patch_file="$PATCHES_DIR/$f.patch"` then `[ -f "$patch_file" ] || continue` — a missing `.patch` file is skipped cleanly. On next container restart, the clean upstream file from the image stays untouched.
+
+A stale `.original` backup is harmless — the init script only consults it for manual diff reference, never for the apply pass.
+
+### Step 3 — Update the init script (always required)
+
+The init script at `99-hermes-patches.sh` (in the infra repo, e.g. `/opt/data/home/hermes-agent/`) registers the file in **two places**:
+
+1. **The `cp` backup line** — removes `cp "$INSTALL_DIR/<path>/<file>.py" "$PATCHES_DIR/<file>.py.original" 2>/dev/null || true`
+2. **The `for f in ...` loop** — removes `<file>.py` from the file list
+
+Without both removals, the init script still runs `cp` to save an `.original` it doesn't need, and still iterates over a patch file that no longer exists (harmless due to the `[ -f ] || continue` guard, but unclean).
+
+Commit and push the change to the infra repo remote.
+
+### Step 4 — Update status.json (if user-writable)
+
+If `~/.hermes/patches/status.json` is user-writable, remove the file's entry. If root-owned (container), the init script regenerates it fresh on next boot — leave it.
 
 ---
 

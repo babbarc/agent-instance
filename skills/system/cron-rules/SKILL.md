@@ -98,6 +98,45 @@ Routine cron jobs (heartbeat, data collection, structured triage) do NOT need ex
 - **B** — Set `reasoning_effort: low/medium` in config.yaml (balanced)
 - **C** — Create profile-based isolation (mixed workloads, see `cron-debugging`)
 
+## Per-Profile Cron Workers
+
+When a cron job needs a different profile's config, .env, skills, or credentials than the default gateway, run a separate gateway per profile — each gateway has its own in-process cron ticker, isolated HERMES_HOME, and process boundary. Do NOT patch the cron scheduler's `run_one_job()` to do in-process profile switching.
+
+### Decision tree: should a job run under a dedicated profile gateway?
+
+1. Does the job need a different model, API key, or skill set than the default profile?
+   - YES → proceed to step 2
+   - NO → keep the job in the default profile's cron; do not create a profile gateway
+
+2. Does the target profile gateway already exist and run? Check: `hermes profile show <name>` shows `Gateway: running`
+   - YES → skip to step 5
+   - NO → proceed to step 3
+
+3. Start the target profile's gateway:
+   - **Host with systemd:** `hermes -p <name> gateway install` then `hermes -p <name> gateway start`
+   - **Host without systemd (tmux):** `tmux new -s <name> -d 'hermes -p <name> gateway run'`
+   - **Container (s6):** `hermes -p <name> profile create --gateway` — the boot reconciler (`02-reconcile-profiles`) auto-starts it on next boot. Verify: `docker exec <c> /command/s6-svstat /run/service/gateway-<name>`
+
+4. Verify the gateway started: `hermes profile show <name>` — expect `Gateway: running`
+
+5. Create the cron job under the target profile's own cron store:
+   ```
+   hermes -p <name> cron create '<schedule>' \
+     --prompt '<self-contained prompt>' \
+     --deliver '<platform>:<chat_id>' \
+     --name '<job-name>'
+   ```
+   The job is stored in the profile's `cron/jobs.json` and fired by its own ticker.
+
+### What NOT to do
+
+- Do NOT patch `cron/scheduler.py::run_one_job()` to switch HERMES_HOME via ContextVar — this is architecturally unsound (see `references/profile-worker-arch.md`):
+  - `os.environ` is process-global. Subprocesses (agent sessions) see the wrong HERMES_HOME.
+  - Job scheduling state reads from one profile's `cron/jobs.json` but mark_job_run/advance_next_run writes to another → infinite-refire or lost-state bug.
+  - `.tick.lock` resolves from the gateway's profile. A separately-running profile gateway and the patched gateway share no lock → double execution.
+  - `except Exception` fallback during profile resolution silently runs the job under the gateway's own profile → security boundary violation.
+- Do NOT share a single `cron/jobs.json` across profiles. Each gateway owns its own cron store.
+
 ## Cross-Cron Data Pipeline
 
 Crons can share data through the life-tracking DB. One cron writes to `life_signals`; a later cron reads and builds on it.
@@ -126,6 +165,7 @@ Crons can share data through the life-tracking DB. One cron writes to `life_sign
 - `references/intent-based-email-classification.md`
 - `references/jobset-recovery.md`
 - `references/pitfalls.md` — 39 known cron failure modes with diagnosis and fixes
+- `references/profile-worker-arch.md` — Per-profile cron worker architecture: why not to patch the scheduler; correct gateway-per-profile approach; Telegram delivery for worker profiles (adapter lock + standalone path); job migration checklist (env/skill/script parity, deliver conversion, sequencing)
 - `references/routing-flow-bc-vs-d.md`
 - `references/routing-flow-transient-items.md` — Distinguishing transient/one-shot items from durable workstreams
 - `references/routing-table-authority.md`
