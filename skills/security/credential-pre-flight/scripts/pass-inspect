@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""
+pass-inspect — safely inspect a pass entry's metadata WITHOUT exposing the secret.
+
+The first line of any pass entry IS the secret. This script reads from pass-to
+(stdin) and prints everything EXCEPT the first line — so login, url, otpauth,
+and any other metadata lines.
+
+Usage (after pass-to restores it):
+  pass-to <path> -- pass-inspect
+
+Output (secret never hits stdout, LLM context, or messaging platforms):
+  login: example-user
+  url: https://example.com/sign-in/
+  otpauth://totp/Example?secret=HIDDEN&period=30
+"""
+import sys, re
+
+lines = sys.stdin.read().split('\n')
+# Line 0 is the secret password — skip it
+for line in lines[1:]:
+    # Obfuscate otpauth secrets even in metadata output
+    if 'secret=' in line.lower():
+        line = re.sub(r'secret=[A-Z2-7=]+', 'secret=HIDDEN', line)
+    print(line)
